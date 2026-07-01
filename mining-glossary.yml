@@ -1,0 +1,583 @@
+# ============================================================
+# MINING DOMAIN GLOSSARY
+# Fort Platform – Investigative Data Agent Reference
+# ============================================================
+# Purpose: Provide the AI agent with authoritative definitions
+# of mining operations terminology, metrics, and rules used
+# across the Fort fleet management system.
+# ============================================================
+
+# ─────────────────────────────────────────────
+# EQUIPMENT & FLEET
+# ─────────────────────────────────────────────
+
+equipment:
+  definition: "A physical machine used in mining operations."
+  examples: ["truck", "excavator", "dozer", "drill"]
+  metrics: ["availability", "utilization", "engine_hours", "fuel_consumption"]
+  notes: "Equipment performance is evaluated using availability and utilization."
+
+functional_role:
+  definition: "The operational classification of a piece of equipment within the fleet."
+  values:
+    haul_truck: "A rigid dump truck that transports material from the loading area to a dump or processing location."
+    loader: "An excavator or shovel that digs and loads material into haul trucks."
+  notes:
+    - "Metrics for haul trucks and loaders must be analyzed separately."
+    - "Combining haul truck and loader metrics without role distinction leads to incorrect conclusions."
+
+truck:
+  definition: "A haulage vehicle used to transport material."
+  alternative_names: ["haul truck", "rigid truck"]
+  key_metrics:
+    payload: "The weight of material carried per load, measured in tonnes."
+    nominal_load: "The rated (design) payload capacity of the truck model in tonnes."
+    cycle_time: "Total time for one complete haul cycle."
+    fuel_consumption: "Total fuel used per cycle or per hour."
+    return_distance: "Distance (km or m) traveled empty from dump back to the loader."
+    haul_distance: "Distance (km or m) traveled loaded from the loader to the dump."
+  notes:
+    - "Payload is compared to nominal_load to determine if the truck is underloaded, on-target, or overloaded."
+    - "Trucks are identified in the system by equip_id and a human-readable name (e.g. RDT129)."
+
+excavator:
+  definition: "A machine used to dig and load material into trucks."
+  alternative_names: ["loader", "load unit", "digger"]
+  key_metrics:
+    bucket_count: "Number of bucket passes (dippers) required to fill one truck."
+    loading_time: "Duration from the start of loading to the truck departing."
+    loader_rate_tph: "Production rate of the loader in tonnes per hour, based on recent cycles."
+    loader_rate_vph: "Production rate of the loader in bank cubic metres per hour."
+    max_loader_rate_vph: "Theoretical maximum production rate of the loader model in BCM/hour."
+    availability: "Percentage of scheduled time the loader is mechanically ready to work."
+  notes:
+    - "Loaders are more expensive to idle than trucks; loader idle time (hanging) is the most critical inefficiency."
+    - "Loaders are identified by equip_id and a name (e.g. REX46, REX50)."
+
+dipper:
+  definition: "A single bucket pass by the excavator into the truck body during loading."
+  notes:
+    - "Multiple dippers are typically required to fill one truck."
+    - "The timestamp of the last dipper marks the effective end of filling, distinct from when the truck departs."
+    - "Anomalies in dipper sequencing (e.g. loading_end → dipper out of order) indicate data quality issues."
+
+truck_factor:
+  definition: "The volume (BCM) that one truck model carries when loaded with a specific material."
+  unit: "BCM per load"
+  notes:
+    - "Used to convert between tonnes and BCM for a given truck model and material combination."
+    - "Each truck model may have a default truck factor (material-agnostic) and per-material overrides."
+
+nominal_load:
+  definition: "The rated payload capacity of a truck model, in tonnes."
+  notes:
+    - "Used as the baseline for payload compliance scoring."
+    - "payload_optimal in shift summaries = sum(nominal_load) × 1.1, representing 110% of rated capacity as the production target."
+
+model:
+  definition: "The equipment model identifier combining manufacturer name and revision (e.g. HD785-7, PC3000-6)."
+  notes:
+    - "A model defines shared specifications such as nominal_load and max_rate_tonnes_h."
+    - "Multiple physical units (fleet) can share the same model."
+
+fleet:
+  definition: "The collective set of physical equipment units operating at a site."
+  notes:
+    - "Each unit in the fleet has an equip_id, a human name, a model, a functional_role, and an is_active flag."
+
+# ─────────────────────────────────────────────
+# MATERIAL & VOLUME
+# ─────────────────────────────────────────────
+
+bcm:
+  definition: "Bank Cubic Meter — the volume of material in its natural, undisturbed state before excavation."
+  unit: "cubic metres (m³)"
+  notes:
+    - "After excavation, material expands (swell), so 1 BCM becomes more than 1 loose cubic metre."
+    - "BCM is the standard volume unit for mine planning and production reporting."
+    - "Converted from tonnes using material density: BCM = load_tonne / density."
+  example: "100 BCM of ore may become 120–130 loose cubic metres after excavation."
+
+tonne:
+  definition: "A metric unit of mass equal to 1,000 kilograms."
+  unit: "tonnes (t)"
+  notes:
+    - "The primary unit for production reporting in mining."
+    - "Volume (BCM) × material density = tonnes."
+  example: "If material density is 2.5 t/m³, then 1 BCM ≈ 2.5 tonnes."
+
+material:
+  definition: "The type of substance being mined and moved by the fleet."
+  types:
+    ore: "Material with economically recoverable minerals. Sent to a processing plant (crusher, mill)."
+    waste: "Material without economic value, removed to access ore and dumped in waste dumps."
+  material_handling_rule: "Ore and waste must be analyzed separately when evaluating production efficiency."
+  notes:
+    - "Each haul load is tagged with a material_id which maps to a material type (ore or waste)."
+    - "Mixing ore and waste in aggregate metrics without filtering leads to incorrect conclusions."
+
+density:
+  definition: "The mass per unit volume of a material, used to convert between tonnes and BCM."
+  unit: "tonnes per BCM (t/m³)"
+
+# ─────────────────────────────────────────────
+# HAUL CYCLE
+# ─────────────────────────────────────────────
+
+haul_cycle:
+  definition: "A complete sequence of operations performed by a haul truck, from one dump event to the next."
+  sequence:
+    - dumping # previous cycle ends; new cycle begins
+    - return # empty travel back to loader
+    - queue # waiting in line at the loader
+    - loading # excavator fills the truck
+    - hauling # loaded travel to dump location
+    - dumping # truck unloads; cycle ends
+  total_cycle_time: "Sum of all phase durations: return + queue + loading + haul + dumping."
+  important_rules:
+    - "A haul cycle always starts and ends at the dump location."
+    - "cycle_start marks when the truck begins moving after the previous dump event."
+    - "dump_end marks when the truck begins moving after the current dump event."
+    - "A cycle is considered complete only when dump_end is not null."
+    - "Cycles with dump_end < cycle_start are invalid and must be excluded from analysis."
+    - "Cycles longer than 1 hour are treated as anomalous and filtered by default."
+
+cycle_phases:
+  dumping:
+    definition: "The truck unloads material at the dump location."
+    timing: "Starts when the truck arrives at the dump zone; ends when the truck begins to move away (dump_end)."
+    notes: "Marks the end of one cycle and the start of the next."
+
+  return:
+    definition: "The truck travels empty from the dump location back to the loading unit."
+    alternative_names: ["empty travel"]
+    metric: "return_duration"
+
+  queue:
+    definition: "The truck waits in line at the loading unit before being loaded."
+    metric: "queue_load_duration"
+    impact:
+      - "High queue time indicates too many trucks assigned to a loader, or inefficient dispatching."
+      - "Increases total cycle time without productive output."
+
+  loading:
+    definition: "The excavator fills the truck body with material."
+    metric: "loading_duration"
+    notes:
+      - "Measured from the first dipper event to the truck departing (haul start)."
+      - "Loader productivity directly affects cycle time and fleet matching."
+
+  hauling:
+    definition: "The truck travels loaded from the loading unit to the dump location."
+    alternative_names: ["loaded travel", "haul"]
+    metric: "haul_duration"
+
+cycle_state:
+  definition: "The current phase a haul truck is in within its haul cycle."
+  values: ["return", "queue_load", "loading", "haul", "dumping"]
+  notes: "Used in fuel analysis to break down consumption per phase."
+
+# ─────────────────────────────────────────────
+# CYCLE INEFFICIENCIES
+# ─────────────────────────────────────────────
+
+queue:
+  definition: "Time a truck spends waiting at the loader before being served."
+  cause: "Too many trucks assigned to a loader, or slow loading."
+  effect: "Increases truck idle time and total cycle time."
+  metric: "queue_load_duration"
+
+hanging:
+  definition: "Time a loader spends idle waiting for the next truck to arrive."
+  cause: "Too few trucks, poor dispatching, or long haul distances."
+  effect: "Loader idle time — the most costly inefficiency since loaders are more expensive than trucks."
+  notes: "Minimizing hanging is a primary objective of fleet management."
+
+load_carryback:
+  definition: "Material that remains in the truck bed after dumping."
+  impact:
+    - "Artificially inflates measured payload."
+    - "Adds unnecessary weight, increasing fuel consumption per productive tonne."
+    - "Reduces effective payload capacity for the next load."
+
+# ─────────────────────────────────────────────
+# PAYLOAD & COMPLIANCE
+# ─────────────────────────────────────────────
+
+payload:
+  definition: "The actual weight of material loaded into a truck per cycle, measured in tonnes."
+  metric: "load_tonne"
+
+payload_compliance:
+  definition: "A measure of whether the truck was loaded within the acceptable payload range relative to its nominal load."
+  bands:
+    under_90_pct: "Payload < 90% of nominal load — underloaded."
+    on_target: "Payload ≥ 90% and < 110% of nominal load — acceptable range."
+    overload_110: "Payload ≥ 110% and < 120% of nominal load — mildly overloaded."
+    overload_120: "Payload ≥ 120% of nominal load — severely overloaded."
+  compliance_rule: "A loader passes payload compliance if 0% of loads exceed 120% and ≤ 10% of loads are between 110%–120%."
+  key_metrics:
+    loads_under_90_pct: "Percentage of loads below 90% of nominal."
+    loads_on_target_pct: "Percentage of loads within the 90%–110% target band."
+    loads_over_110_pct: "Percentage of loads exceeding 110% of nominal."
+    loads_over_120_pct: "Percentage of loads exceeding 120% of nominal."
+    lost_production: "Sum of (nominal_load − load_tonne) for all underloaded cycles (<90%)."
+
+payload_optimal:
+  definition: "The theoretical maximum production target: sum of nominal loads × 1.1, representing 110% of rated capacity."
+  formula: "payload_optimal = SUM(nominal_load) × 1.1"
+  notes: "Used in shift summaries as the production ceiling to compare actual payload against."
+
+underloading:
+  definition: "A pattern where a truck consistently carries less than 90% of its nominal payload."
+  causes:
+    [
+      "Operator technique",
+      "Material type mismatch",
+      "Loading spot positioning",
+      "Equipment fault",
+    ]
+  notes: "Underloading is a key anomaly to detect; it reduces fleet productivity without reducing cycle count."
+
+# ─────────────────────────────────────────────
+# MATCH FACTOR & FLEET SIZING
+# ─────────────────────────────────────────────
+
+match_factor:
+  definition: "The ratio of the actual rate at which trucks arrive at a loader to the rate the loader needs trucks to stay fully productive."
+  formula: "match_factor = trucks_arrival_rate / loader_capacity"
+  interpretation:
+    equals_1: "Ideal — trucks arrive at exactly the rate the loader needs."
+    greater_than_1: "Over-trucked — trucks arrive faster than the loader can serve them, causing queue buildup."
+    less_than_1: "Under-trucked — the loader waits idle (hanging) between trucks."
+  related_metrics:
+    truck_cycle_time: "Return + queue + loading + haul + dumping durations."
+    truck_productivity: "Truck capacity (tonnes) divided by cycle time (hours). Measured in tonnes/hour per truck."
+    trucks_needed: "loader_production_rate / truck_productivity — the ideal number of trucks for this loader."
+    loader_production_rate: "Production rate of the loader in tonnes per hour, estimated from recent cycle data."
+    trucks_arrival_rate: "Number of trucks in production divided by cycle time."
+    loader_capacity: "loader_production_rate / truck_capacity."
+
+loader_rate_tph:
+  definition: "Loader production rate in tonnes per hour, calculated from recent loading cycles."
+  formula: "(60 / (avg_loading_duration_min + avg_spot_duration_min)) × avg_load_tonne"
+  notes: "Based on the last N completed cycles (typically the last 4)."
+
+loader_rate_vph:
+  definition: "Loader production rate in BCM per hour."
+  formula: "(60 / (avg_loading_duration_min + avg_spot_duration_min)) × avg_truck_factor_bcm"
+
+loading_spot:
+  definition: "The time a truck spends maneuvering into position at the loader before loading begins."
+  notes: "Captured from on-board CAN data. Added to loading_duration to compute the total loading cycle time for rate calculations."
+
+# ─────────────────────────────────────────────
+# PRODUCTION METRICS
+# ─────────────────────────────────────────────
+
+production:
+  definition: "The total material moved by the fleet over a given period."
+  units:
+    tonnes: "Primary production unit."
+    bcm: "Secondary volume unit."
+  breakdown_rule: "Always report production separately for ore and waste unless a combined total is explicitly requested."
+
+shift_productivity:
+  definition: "The total payload (tonnes or BCM) moved by each equipment unit or the full fleet during a shift."
+
+mineplan:
+  definition: "The planned production schedule for a site, specifying target tonnage and volumes by material, location, and time period."
+  notes:
+    - "Used to compare actual production against planned targets (BCM vs. mineplan)."
+    - "Mineplan targets are set per material type and dump/source location."
+
+source:
+  definition: "The origin zone where material is excavated and loaded. Also called the dig area or bench."
+  notes: "A source is a geographic zone (e.g. pit bench) associated with a specific material type."
+
+destination:
+  definition: "The location where material is deposited after hauling. Can be a waste dump, ROM pad, crusher, or stockpile."
+  examples: ["WASTE", "ROM_PAD", "CRUSHER"]
+
+dump_location:
+  definition: "A configured location where trucks unload material. Determined by the task assigned to the truck by the dispatch system."
+
+strip_ratio:
+  definition: "The volume of waste that must be removed to access one unit of ore."
+  unit: "BCM waste per BCM ore, or tonnes waste per tonne ore"
+  notes: "A higher strip ratio means more waste movement is required, increasing mining cost."
+
+# ─────────────────────────────────────────────
+# FLEET HEALTH & AVAILABILITY (TIME UTILIZATION MODEL)
+# ─────────────────────────────────────────────
+
+time_utilization_model:
+  definition: "A framework (TUM) for classifying all equipment time into standardized categories to measure availability and utilization."
+  abbreviation: "TUM"
+  purpose: "Allows consistent comparison of equipment productivity across sites and periods."
+
+tum_categories:
+  PRODUCTION:
+    definition: "Time the equipment is actively performing its primary work function (hauling, loading, digging)."
+  STANDBY:
+    definition: "Time when equipment is available but not required to work (e.g. waiting for shift start, no material)."
+  PLANNED_PRODUCTION_DELAY:
+    definition: "Scheduled interruptions to production that are not caused by equipment failure (e.g. blasting, road maintenance, shift change)."
+  UNPLANNED_PRODUCTION_DELAY:
+    definition: "Unscheduled interruptions to production not caused by equipment failure (e.g. traffic jam, weather, operator absence)."
+  PLANNED_EQUIPMENT_DOWNTIME:
+    definition: "Scheduled maintenance or inspection periods where the equipment is intentionally taken out of service."
+  UNPLANNED_EQUIPMENT_DOWNTIME:
+    definition: "Unexpected mechanical or electrical breakdowns that take equipment out of service."
+
+calendar_time:
+  definition: "The total wall-clock time in the analysis period, regardless of whether equipment was active."
+  notes: "Splits strictly at midnight; does not consider shift schedules."
+
+required_time:
+  definition: "The time the equipment is required to be productive: Calendar Time − Standby Time."
+  formula: "required_time = calendar_time − standby_time"
+
+available_time:
+  definition: "The time the equipment is mechanically ready to work: Required Time − Equipment Downtime."
+  formula: "available_time = required_time − equipment_downtime"
+  notes: "Equipment downtime = planned equipment downtime + unplanned equipment downtime."
+
+availability:
+  definition: "The percentage of required time the equipment is mechanically available."
+  formula: "availability = available_time / required_time × 100"
+  warning: "Not the same as utilization. Equipment can be available but not actively used."
+
+utilization:
+  definition: "The percentage of required time the equipment is actively in production."
+  formula: "utilization = process_time / required_time × 100"
+  warning: "Can be low even when availability is high (e.g. idle trucks waiting for a loader)."
+  notes: "Required time (not available time) is used as the denominator."
+
+process_time:
+  definition: "Time the equipment is classified as PRODUCTION within the TUM framework."
+
+equipment_downtime:
+  definition: "Total time the equipment is out of service due to maintenance or breakdown."
+  components:
+    planned: "Scheduled maintenance (PLANNED EQUIPMENT DOWNTIME)."
+    unplanned: "Unexpected breakdown (UNPLANNED EQUIPMENT DOWNTIME)."
+
+mtbf:
+  definition: "Mean Time Between Failures — average available time between unplanned equipment downtime events."
+  formula: "MTBF = available_time / number_of_failures"
+  notes: "Only failures that started within the analysis period are counted."
+
+mttr:
+  definition: "Mean Time To Repair — average duration of unplanned equipment downtime events."
+  formula: "MTTR = total_unplanned_downtime / number_of_failures"
+
+delay_event:
+  definition: "A recorded period during which equipment was in a non-PRODUCTION, non-STANDBY TUM status."
+  types:
+    production_delay: "Classified under PLANNED or UNPLANNED PRODUCTION DELAY."
+    equipment_downtime: "Classified under PLANNED or UNPLANNED EQUIPMENT DOWNTIME."
+
+tum_status:
+  definition: "The specific named status assigned to an equipment unit at a point in time (e.g. SHIFT CHANGE, FUELING, BREAKDOWN)."
+  notes:
+    - "Each status belongs to one of the six TUM categories."
+    - "Sites can define custom status names and codes."
+
+# ─────────────────────────────────────────────
+# FUEL
+# ─────────────────────────────────────────────
+
+fuel_consumption:
+  definition: "The volume of fuel used by equipment over a cycle, shift, or period."
+  unit: "litres (L)"
+  per_cycle_metrics:
+    return_fuel_volume: "Fuel consumed during the empty return phase."
+    queue_load_fuel_volume: "Fuel consumed while queuing."
+    loading_fuel_volume: "Fuel consumed during loading."
+    haul_fuel_volume: "Fuel consumed during loaded hauling."
+    dumping_fuel_volume: "Fuel consumed during dumping."
+
+fuel_rate:
+  definition: "Fuel consumption rate normalised by time or production volume."
+  metrics:
+    rate_l_h: "Litres per hour — total fuel divided by operating hours."
+    l_cycle: "Litres per cycle — total fuel divided by number of cycles with fuel data."
+    efficiency_l_bcm: "Litres per BCM — overall fuel divided by total BCM moved. Fleet-level efficiency metric."
+  notes:
+    - "Trucks use CAN-bus data for fuel; loaders use SMR (Service Meter Reading) and model-based consumption rates."
+    - "The PC3000-6 loader fuel is estimated from SMR delta × fuel_consumption_l_per_h model spec."
+
+smr:
+  definition: "Service Meter Reading — the cumulative engine-hours counter on heavy equipment."
+  unit: "hours"
+  notes:
+    - "Used to track loader fuel consumption when direct fuel flow measurement is not available."
+    - "SMR delta over a period × fuel rate = estimated fuel consumed."
+
+# ─────────────────────────────────────────────
+# GPS & TELEMETRY
+# ─────────────────────────────────────────────
+
+gps:
+  definition: "Global Positioning System data transmitted by equipment at regular intervals."
+  fields:
+    latitude: "North–South coordinate of the equipment."
+    longitude: "East–West coordinate of the equipment."
+    altitude: "Elevation above sea level (metres)."
+    speed: "Instantaneous GPS speed (km/h)."
+  notes:
+    - "GPS data is used to detect equipment location relative to zones and dump locations."
+    - "Last GPS position is stored per haul cycle for post-analysis."
+
+can_event:
+  definition: "Controller Area Network events — telemetry data transmitted from the truck's on-board computer."
+  notes:
+    - "CAN events include haul cycle phase transitions (return, loading, haul, dumping)."
+    - "Also includes payload measurements updated during loading."
+
+haul_event:
+  definition: "An event emitted by the truck's payload management system to signal a phase transition in the haul cycle."
+  event_names: ["return", "queue_load", "loading", "haul", "dumping", "final"]
+  notes:
+    - "The 'final' event signals the end of the cycle (truck has dumped and is beginning to move)."
+    - "Haul events drive the construction of the prod.load record."
+
+ods_event:
+  definition: "Operator Drowsiness System event — fatigue detection telemetry from driver monitoring cameras."
+  notes: "Generates alerts when drowsiness indicators exceed thresholds (e.g. PERCLOS — percentage of eye closure)."
+
+# ─────────────────────────────────────────────
+# ROAD NETWORK
+# ─────────────────────────────────────────────
+
+road_network:
+  definition: "The defined graph of road segments and nodes used by trucks to travel between the loader and dump locations."
+  components:
+    segment: "A directed road section connecting two nodes with attributes including geometry and historical travel statistics."
+    node: "An intersection or waypoint on the road network."
+  uses:
+    - "Route calculation between loader and dump location."
+    - "Haul and return time estimation based on historical segment travel durations."
+    - "Road performance analysis (actual travel time vs. expected)."
+
+route:
+  definition: "A computed path through the road network from one location to another."
+  types:
+    route_haul: "The loaded path from the loader to the dump location."
+    route_return: "The empty path from the dump location back to the loader."
+  notes: "Routes are calculated using pgRouting on the road network graph."
+
+segment_statistic:
+  definition: "Aggregated historical travel time data for each road segment, broken down by direction (forward/reverse) and route type (haul/return)."
+  key_metric: "duration_interquartile_avg — the interquartile mean travel time for the segment, used for cycle time estimation."
+
+# ─────────────────────────────────────────────
+# SHIFT & TIME
+# ─────────────────────────────────────────────
+
+shift:
+  definition: "A defined working period at the mine, typically 10–12 hours, during which equipment operates under one crew assignment."
+  notes:
+    - "Shifts may cross midnight; all activities within a shift belong to the same operational day."
+    - "The shift_start timestamp is the anchor for grouping all production and availability data."
+
+operational_day:
+  definition: "A 24-hour production day anchored to the shift start time, not calendar midnight."
+  example: "If shifts start at 06:00, the operational day runs 06:00 Day 1 → 06:00 Day 2."
+  sql_pattern: "DATE(timestamp - INTERVAL '6 hours')  — shift timestamp by the shift offset before extracting date."
+
+calendar_vs_operational_time:
+  definition: "Calendar time splits data at midnight. Operational time aligns with shift boundaries, ensuring activities within one shift are grouped into the same production day."
+  warning: "Using calendar date (DATE(timestamp)) on shift data crossing midnight will split a single shift across two days, distorting analysis."
+
+shift_change:
+  definition: "The transition period between two consecutive shifts."
+  notes: "Typically classified as a PLANNED PRODUCTION DELAY in the TUM. Equipment may be idle during this period."
+
+crew:
+  definition: "A named group of operators assigned to a shift."
+  notes: "Crew assignments are recorded per shift to support operator-level performance analysis."
+
+# ─────────────────────────────────────────────
+# TASKS & DISPATCH
+# ─────────────────────────────────────────────
+
+task:
+  definition: "A dispatch instruction sent to a piece of equipment defining its next assignment."
+  types:
+    assign_loader_to_dump: "Instructs a loader to move material from a source zone to a specific dump location."
+  notes:
+    - "Active tasks determine which loader–destination pairing is in effect for match factor calculations."
+    - "Tasks have statuses: pending, active, completed, cancelled."
+
+circuit:
+  definition: "The operational loop between a loader and its assigned dump location, encompassing all trucks working that route."
+  notes:
+    - "Circuit management determines how many trucks are assigned to each loader."
+    - "Adjusting the circuit (adding/removing trucks) is a key lever for managing match factor."
+
+zone:
+  definition: "A defined geographic area on the mine site used as a material source (dig area)."
+  notes: "Zones are polygons in the geospatial model and are used to identify where material is coming from."
+
+location:
+  definition: "A specific destination point on the mine site (e.g. dump, ROM pad, crusher)."
+  notes: "Locations are associated with a location_role (e.g. dump, processing)."
+
+# ─────────────────────────────────────────────
+# ANALYTICS & STATISTICAL CONCEPTS
+# ─────────────────────────────────────────────
+
+interquartile_mean:
+  definition: "The mean calculated after removing the top and bottom N% of values to reduce the influence of outliers."
+  abbreviation: "IQM"
+  notes:
+    - "Used in cycle time and segment duration calculations."
+    - "The system uses ntile(10) windows and filters to the middle 60% (ntiles 3–7) by default."
+    - "Exclude extreme percentage (exclude_extreme) is configurable; default is 10% from each end."
+
+outlier_exclusion:
+  definition: "The practice of removing extreme data points from statistical summaries to obtain more representative averages."
+  method: "percent_rank() is computed per metric; rows outside the configured exclude_extreme band are discarded."
+  warning: "Outlier exclusion is applied by default in haul cycle stats. Set exclude_extreme to 0 to include all data."
+
+period_aggregation:
+  definition: "The time granularity at which metrics are grouped and reported."
+  values:
+    hour: "One-hour buckets."
+    shift: "Per shift interval as defined by site configuration."
+    day: "Per operational day (shift-aligned)."
+    week: "Per week (Sunday-aligned, shift-adjusted)."
+    month: "Per calendar month (shift-adjusted)."
+
+group_by:
+  definition: "The dimension used to segment reported metrics."
+  common_values:
+    loader: "Break down metrics by individual loader unit."
+    truck: "Break down metrics by individual truck unit."
+    material: "Break down metrics by material type."
+    source: "Break down metrics by source zone."
+    destination: "Break down metrics by dump/destination location."
+    functional_role: "Group all loaders together and all haul trucks together."
+    model: "Group by equipment model (e.g. all HD785-7s together)."
+    equip_name: "Report per individual equipment unit (default)."
+
+# ─────────────────────────────────────────────
+# KEY RULES FOR THE AGENT
+# ─────────────────────────────────────────────
+
+agent_rules:
+  - rule: "Always separate ore and waste when analyzing production efficiency."
+  - rule: "A haul cycle is only complete when dump_end IS NOT NULL. Exclude incomplete cycles from productivity analysis."
+  - rule: "Filter out cycles where dump_end < cycle_start — these are data errors."
+  - rule: "Cycles longer than 1 hour are anomalous by default and should be noted."
+  - rule: "Use operational time (shift-aligned) not calendar time when grouping shift data across midnight."
+  - rule: "Availability ≠ Utilization. Equipment can be available (mechanically ready) but not utilized (not working)."
+  - rule: "Loader idle time (hanging) is more costly than truck idle time (queue). Prioritize reducing hanging."
+  - rule: "Match Factor = 1 is ideal. > 1 means too many trucks; < 1 means too few trucks."
+  - rule: "Payload compliance is assessed against nominal_load of the truck model, not an arbitrary threshold."
+  - rule: "Dipper count and sequence anomalies are early signals of loading inefficiency or sensor data issues."
+  - rule: "Fuel efficiency (L/BCM) is a fleet-level metric; it should not be computed per individual truck without BCM context."
+  - rule: "SMR delta is used for loader fuel; CAN-bus fuel data is used for trucks — do not mix these sources."
+  - rule: "IQM (interquartile mean) is the preferred average for noisy operational time series data."

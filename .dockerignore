@@ -1,0 +1,58 @@
+# Python virtualenv and lockfile (deps installed in-container)
+.venv
+uv.lock
+.python-version
+
+# LangGraph local dev cache
+.langgraph_api/
+
+# Runtime-generated chart artifacts (mounted via volume in compose)
+charts/
+
+# Python bytecode
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment and secrets
+.env
+.env.*
+*.local
+
+# Git
+.git
+.gitignore
+
+# Docker (not needed inside the image)
+.dockerignore
+docker-compose.yml
+Dockerfile.charts
+
+# Build and cache directories
+dist
+build
+.cache
+node_modules
+bower_components
+vendor
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# IDE and editor
+.vscode
+.idea
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# Tests and coverage
+coverage
+*.coverage
+*.test.js
+*.spec.js
+tests

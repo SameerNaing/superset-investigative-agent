@@ -1,0 +1,21 @@
+services:
+  langgraph-api:
+    volumes:
+      - charts-data:/data/charts
+    environment:
+      CHARTS_DIR: /data/charts
+
+  charts-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.charts
+    ports:
+      - "8001:8001"
+    volumes:
+      - charts-data:/data/charts
+    environment:
+      CHARTS_DIR: /data/charts
+      CORS_ORIGIN: https://your-frontend.example.com
+
+volumes:
+  charts-data:
