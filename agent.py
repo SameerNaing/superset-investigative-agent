@@ -15,6 +15,9 @@ tools = [
     superset_tools.get_chart_list,
     superset_tools.get_chart_detail,
     superset_tools.generate_evidence_chart,
+    superset_tools.get_dataset_list,
+    superset_tools.get_dataset_detail,
+    superset_tools.execute_sql,
 
     # analytics tools — summarize_chart_data removed.
     # Small datasets are auto-summarized inside get_chart_detail.
