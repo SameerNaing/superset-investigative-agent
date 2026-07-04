@@ -1,15 +1,15 @@
 from langchain_core.tools import tool
 
-from ..services.chart_detail_service import ChartDetailService
-from ..services.chart_list import ChartListService
-from ..services.chart_data_service import ChartDataService
-from ..services.evidence_chart_service import EvidenceChartService
-from ..schemas.superset_schemas import AppliedFilter
+from ..services import ChartDataService, ChartDetailService, ChartListService, EvidenceChartService, SQLExecutionService, DatasetListService, DatasetDetailService
+from ..schemas import AppliedFilter, DatasetDetail, DatasetListItem, DatasetDetail
 
 _chart_list_service = ChartListService()
 _chart_detail_service = ChartDetailService()
 _chart_data_service = ChartDataService()
 _evidence_chart_service = EvidenceChartService()
+_sql_execution_service = SQLExecutionService()
+_dataset_list_service = DatasetListService()
+_dataset_detail_service = DatasetDetailService()
 
 
 @tool
@@ -104,3 +104,74 @@ def generate_evidence_chart(
     """
     data = _chart_data_service.get(chart_id, filters)        
     return _evidence_chart_service.get(chart_id, interpretation, data)
+
+@tool
+def get_dataset_list() -> list[DatasetListItem]:
+    """
+    List all available Superset datasets.
+
+    Use this tool when you need to identify which dataset contains the
+    information required to answer the user's question.
+
+    Returns a summary of each dataset including:
+    - dataset ID
+    - dataset name
+    - optional business description
+    - dataset type (physical or virtual)
+    - underlying table or SQL definition
+    """
+    datasets = _dataset_list_service.get_dataset_list()
+    return [dataset.model_dump() for dataset in datasets]
+
+@tool
+def get_dataset_detail(dataset_id: int) -> DatasetDetail:
+    """
+    Retrieve the complete metadata for a Superset dataset.
+
+    Use this tool when you need detailed information about a dataset before
+    querying or analyzing it.
+
+    Returns:
+    - available physical and calculated columns
+    - reusable business metrics
+    - existing charts built from the dataset
+    - database connection information
+    - dataset type and underlying table or SQL definition
+
+    Existing metrics and calculated columns represent approved business logic
+    and should be reused whenever they satisfy the user's request instead of
+    recreating equivalent calculations.
+    """
+    detail = _dataset_detail_service.get(dataset_id)
+    return detail.model_dump()
+
+
+@tool
+def execute_sql(
+    db_connection_id: int,
+    sql: str,
+    query_limit: int = 1000,
+) -> dict:
+    """
+    Execute a read-only SQL query against a Superset database.
+
+    Use this tool when answering a question requires querying data,
+    filtering, grouping, ranking, aggregation, or custom calculations.
+
+    Prefer reusing existing business metrics and calculated columns whenever
+    possible instead of generating equivalent SQL expressions.
+
+    SQL should be read-only and optimized to return only the data necessary
+    to answer the user's question.
+
+    Args:
+        db_connection_id: Superset database connection ID.
+        sql: Read-only SQL statement to execute.
+        query_limit: Maximum number of rows to return.
+    """
+    results = _sql_execution_service.execute_sql(
+        db_connection_id,
+        sql,
+        query_limit,
+    )
+    return results

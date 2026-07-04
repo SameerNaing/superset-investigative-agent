@@ -3,3 +3,4 @@ from ..extractors.column_extractor import (
     extract_metric_columns,
     extract_query_columns,
 )
+from ..extractors.metric_extractor import extract_chart_metrics

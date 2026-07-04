@@ -14,7 +14,8 @@
 equipment:
   definition: "A physical machine used in mining operations."
   examples: ["truck", "excavator", "dozer", "drill"]
-  metrics: ["availability", "utilization", "engine_hours", "fuel_consumption"]
+  metrics:
+    ["availability", "utilization", "engine_hours", "fuel_consumption", "smr"]
   notes: "Equipment performance is evaluated using availability and utilization."
 
 functional_role:
@@ -53,6 +54,7 @@ excavator:
   notes:
     - "Loaders are more expensive to idle than trucks; loader idle time (hanging) is the most critical inefficiency."
     - "Loaders are identified by equip_id and a name (e.g. REX46, REX50)."
+    - When presenting to user never use the word "loader" to refer to the excavator, use "load unit" instead.
 
 dipper:
   definition: "A single bucket pass by the excavator into the truck body during loading."
@@ -140,7 +142,6 @@ haul_cycle:
     - "dump_end marks when the truck begins moving after the current dump event."
     - "A cycle is considered complete only when dump_end is not null."
     - "Cycles with dump_end < cycle_start are invalid and must be excluded from analysis."
-    - "Cycles longer than 1 hour are treated as anomalous and filtered by default."
 
 cycle_phases:
   dumping:
@@ -571,7 +572,6 @@ agent_rules:
   - rule: "Always separate ore and waste when analyzing production efficiency."
   - rule: "A haul cycle is only complete when dump_end IS NOT NULL. Exclude incomplete cycles from productivity analysis."
   - rule: "Filter out cycles where dump_end < cycle_start — these are data errors."
-  - rule: "Cycles longer than 1 hour are anomalous by default and should be noted."
   - rule: "Use operational time (shift-aligned) not calendar time when grouping shift data across midnight."
   - rule: "Availability ≠ Utilization. Equipment can be available (mechanically ready) but not utilized (not working)."
   - rule: "Loader idle time (hanging) is more costly than truck idle time (queue). Prioritize reducing hanging."

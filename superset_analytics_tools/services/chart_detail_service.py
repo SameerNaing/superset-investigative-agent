@@ -1,8 +1,7 @@
 import json
 
 from ..client import superset_client
-from ..constants import superset_consts
-from ..extractors import collect_filterable_columns
+from ..extractors import collect_filterable_columns, extract_chart_metrics
 from ..parsers import (
     build_available_filters,
     build_sample_data,
@@ -29,11 +28,7 @@ class ChartDetailService:
         queries = query_context.get("queries", [])
         viz_type = form_data.get("viz_type")
       
-        metrics = form_data.get("metrics")
-        if viz_type in [superset_consts.VizType.BIG_NUMBER_TOTAL, superset_consts.VizType.SANKEY]:
-            metrics = [form_data.get("metric")]
-        if viz_type == superset_consts.VizType.GANTT:
-            metrics = form_data.get("tooltip_metrics")
+        metrics, metrics_b = extract_chart_metrics(form_data)
 
         return {
             "col_dtype_ref": col_dtype_ref,
@@ -44,7 +39,7 @@ class ChartDetailService:
             "datasource_id": query_context.get("datasource", {}).get("id"),
             "chart_name": result.get("slice", {}).get("slice_name"),
             "metrics": metrics,
-            "metrics_b": form_data.get("metrics_b"),
+            "metrics_b": metrics_b,
             "adhoc_filters": form_data.get("adhoc_filters") or [],
             "adhoc_filters_b": form_data.get("adhoc_filters_b"),
         }
