@@ -56,6 +56,7 @@ def generate_evidence_chart(
     chart_id: int,
     interpretation: str,
     filters: list[AppliedFilter],
+    time_grain: str = None,
 ) -> dict:
     """
     Generate and save a frontend-ready evidence chart for an investigation.
@@ -96,13 +97,16 @@ def generate_evidence_chart(
         filters:
             The exact filters used during the investigation before fetching
             chart data.
+        
+        time_grain:
+            The time grain to use for the chart.
 
     Returns:
         A dictionary with:
         - viz_id: ID of the saved evidence-chart JSON file.
         - interpretation: The same interpretation text provided by the agent.
     """
-    data = _chart_data_service.get(chart_id, filters)        
+    data = _chart_data_service.get(chart_id, filters, time_grain)        
     return _evidence_chart_service.get(chart_id, interpretation, data)
 
 @tool
