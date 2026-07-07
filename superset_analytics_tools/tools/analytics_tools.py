@@ -41,6 +41,7 @@ def detect_timeseries_anomalies(
     time_col: str,
     summary_question: str,
     metric_col: str,
+    time_grain: str = None,
     query_type: QueryType | None = None,
 ) -> str:
     """
@@ -64,13 +65,14 @@ def detect_timeseries_anomalies(
             generated explanation.
         metric_col: Name of the numeric metric to analyze.
         query_type: Required only for Mixed charts containing two queries.
+        time_grain: The time grain to use for the chart.
 
     Returns:
         A concise natural-language explanation that answers the user's
         question using either the raw data (small datasets) or statistical
         anomaly detection (larger datasets). 
     """
-    data = _chart_data_service.get(chart_id, filter)
+    data = _chart_data_service.get(chart_id, filter, time_grain)
     data = _check_get_data(data, query_type)
 
     try:
@@ -100,6 +102,7 @@ def detect_cross_section_anomalies(
     summary_question: str,
     metric_col: str,
     query_type: QueryType | None = None,
+    time_grain: str = None,
 ) -> str:
     """
     Analyze a metric across categories and explain unusual category-level values.
@@ -122,12 +125,12 @@ def detect_cross_section_anomalies(
             generated explanation.
         metric_col: Name of the numeric metric to compare across categories.
         query_type: Required only for Mixed charts containing two queries.
-
+        time_grain: The time grain to use for the chart.
     Returns:
         A concise natural-language explanation that answers the user's
         question using either the raw data or cross-section anomaly detection.
     """
-    data = _chart_data_service.get(chart_id, filter)
+    data = _chart_data_service.get(chart_id, filter, time_grain)
     data = _check_get_data(data, query_type)
 
     try:
@@ -155,6 +158,7 @@ def detect_relationship_anomalies(
     summary_question: str,
     y_col: str,
     query_type: QueryType | None = None,
+    time_grain: str = None,
 ) -> str:
     """
     Analyze the relationship between two numeric columns and explain unusual
@@ -178,12 +182,12 @@ def detect_relationship_anomalies(
             generated explanation.
         y_col: Name of the dependent/outcome numeric column.
         query_type: Required only for Mixed charts containing two queries.
-
+        time_grain: The time grain to use for the chart.
     Returns:
         A concise natural-language explanation that answers the user's
         question using either the raw data or relationship anomaly detection.
     """
-    data = _chart_data_service.get(chart_id, filter)
+    data = _chart_data_service.get(chart_id, filter, time_grain)
     data = _check_get_data(data, query_type)
 
     try:

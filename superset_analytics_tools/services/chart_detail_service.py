@@ -14,6 +14,29 @@ from ..schemas import superset_schemas
 
 
 class ChartDetailService:
+    def _get_time_grain_info(self, queries, time_grain_list):
+        if len(queries) == 0:
+            return None
+        
+        query = queries[0]
+        
+        time_grain_col = None
+        for col in query.get('columns'):
+            if type(col) != dict:
+                continue 
+            
+            timegrain = col.get('timeGrain')
+            if not timegrain:
+                continue 
+            
+            time_grain_col = superset_schemas.TimeGrainInfo(
+                col=col.get("sqlExpression"),
+                current_val=col.get('timeGrain'),
+                available_vals=time_grain_list
+            )
+            break    
+        
+        return time_grain_col
         
     def _load_chart(self, chart_id):
         res = superset_client.get_chart_detail(chart_id)
@@ -27,6 +50,8 @@ class ChartDetailService:
         query_context = json.loads(result.get("slice", {}).get("query_context", "{}"))
         queries = query_context.get("queries", [])
         viz_type = form_data.get("viz_type")
+        time_grain_list = {j: i for i,j in dataset.get("time_grain_sqla", {})}
+        
       
         metrics, metrics_b = extract_chart_metrics(form_data)
 
@@ -35,6 +60,7 @@ class ChartDetailService:
             "form_data": form_data,
             "query_context": query_context,
             "queries": queries,
+            "time_grain_list": time_grain_list,
             "viz_type": viz_type,
             "datasource_id": query_context.get("datasource", {}).get("id"),
             "chart_name": result.get("slice", {}).get("slice_name"),
@@ -46,6 +72,8 @@ class ChartDetailService:
 
     def get(self, chart_id, include_possible_analysis=True) -> superset_schemas.ChartDetail:
         chart = self._load_chart(chart_id)
+        
+        time_grain_info = self._get_time_grain_info(chart["queries"], chart["time_grain_list"])
 
         metrics = parse_metrics(chart["metrics"], chart["metrics_b"])
         locked_filters, adhoc_cols = parse_adhoc_filters(
@@ -76,4 +104,5 @@ class ChartDetailService:
             applied_filters=applied_filters,
             locked_filters=locked_filters,
             data_samples=samples,
+            timegrain=time_grain_info,
         )

@@ -85,12 +85,37 @@ class AppliedFilter(BaseModel):
     val: str | List[str | int] | int | None = None
 
 
+class TimeGrainInfo(BaseModel):
+    col: str = Field(
+        description="The datetime column currently used for time aggregation on the chart. Changing the time grain will aggregate this column into larger or smaller time buckets."
+    )
+
+    current_val: str | None = Field(
+        default=None,
+        description="The currently applied time grain (e.g. PT1H, P1D, P1W). This is the chart's current aggregation level."
+    )
+
+    available_vals: dict[str, str] = Field(
+        default_factory=dict,
+        description="The time grains supported by this chart. Keys are user-friendly names (e.g. Hour, Day, Month) and values are the Superset time grain codes to use when updating the chart."
+    )
+    
 class ChartDetail(BaseModel):
     id: int
     name: str
     viz_type: str
 
     metrics: List[Metric] | List[List[Metric]]
+    
+    timegrain: TimeGrainInfo | None = Field(
+    default=None,
+    description=(
+        "Time aggregation settings for the chart. "
+        "This field is only present when the chart's x-axis or table or pivot table column is a datetime column. "
+        "Use it when the user or you want to change the aggregation level, such as Hour, Day, Week, Month, or Year. "
+        "If this field is null, the chart does not support time-grain adjustments."
+        ),
+    )
     
     available_filters : List[AvailableFilter]
     
