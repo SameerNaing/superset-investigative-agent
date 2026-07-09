@@ -99,13 +99,40 @@ class TimeGrainInfo(BaseModel):
         default_factory=dict,
         description="The time grains supported by this chart. Keys are user-friendly names (e.g. Hour, Day, Month) and values are the Superset time grain codes to use when updating the chart."
     )
-    
+
+class Dimension(BaseModel):
+    name: str = Field(
+        description=(
+            "The logical name of the dimension. For a regular dataset column, this is "
+            "the column name. For a SQL-based dimension, this is the display label "
+            "assigned by the chart author. Use this field when referring to, selecting, "
+            "or modifying the chart's dimensions."
+        )
+    )
+
+    sql_expression: str | None = Field(
+        default=None,
+        description=(
+            "The SQL expression used to compute the dimension when the dimension is "
+            "based on a custom SQL expression. This field is null for regular dataset "
+            "columns."
+        )
+    )
 class ChartDetail(BaseModel):
     id: int
     name: str
     viz_type: str
 
     metrics: List[Metric] | List[List[Metric]]
+    
+    dimensions: List[Dimension] | List[List[Dimension]] = Field(
+        default=[],
+        description=(
+            "Categorical dimensions currently used by the chart to group or break down "
+            "the displayed metrics. These are the user-selected grouping fields and do "
+            "not include the time axis. Empty if the chart has no categorical dimensions."
+        )
+    )
     
     timegrain: TimeGrainInfo | None = Field(
     default=None,
