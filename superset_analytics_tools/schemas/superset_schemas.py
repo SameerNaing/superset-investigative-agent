@@ -306,3 +306,8 @@ class DatasetDetail(BaseModel):
         ...,
         description="The dataset type. Usually either 'physical' or 'virtual'."
     )
+    
+    samples: list[dict] = Field(
+        ...,
+        description="The samples of the dataset."
+    )

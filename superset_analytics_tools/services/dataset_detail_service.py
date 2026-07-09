@@ -42,6 +42,20 @@ class DatasetDetailService:
             
         return cols
     
+    def _get_samples(self, dataset_id): 
+        payload = {
+            "datasource": { "id": dataset_id, "type": "table" },
+            "result_type": "samples",
+            "queries": [{}],
+        }
+        
+        res = superset_client.get_chart_data_table(payload=payload, result_type="samples")
+        
+        if len(res) == 0:
+            return []
+        
+        return res[0].get("data", [])[:3]
+    
     
     def get(self, dataset_id):
         detail = superset_client.get_dataset_detail(dataset_id)
@@ -63,6 +77,8 @@ class DatasetDetailService:
         columns = self._map_columns(columns)
         metrics = self._get_charts_metrics(charts)
         
+        samples = self._get_samples(dataset_id)
+        
         
         return superset_schemas.DatasetDetail(
             id=dataset_id, 
@@ -71,4 +87,5 @@ class DatasetDetailService:
             db_connection_id=db_id, 
             charts=charts, 
             metrics=metrics,
-            kind=kind)
+            kind=kind,
+            samples=samples)
