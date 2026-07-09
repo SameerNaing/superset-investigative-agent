@@ -86,7 +86,7 @@ def get_chart_info(chart_id):
     
     return result
 
-def get_chart_data_table(payload):
+def get_chart_data_table(payload, result_type="results"):
     token = login()
     url = os.path.join(API_BASE_URL, "chart", "data")
     
@@ -98,7 +98,7 @@ def get_chart_data_table(payload):
     
     payload = json.dumps({
             **payload, 
-            "result_type": "results"
+            "result_type": result_type
         })
     
     
