@@ -51,19 +51,32 @@ def parse_applied_filters(queries):
     return parsed[0] if len(parsed) == 1 else parsed
 
 
-def build_available_filters(columns, col_dtype_ref, datasource_id):
+def build_available_filters(col_dtype_ref: dict[str, str], datasource_id: int):
+    
+    """
+    Build available filters from column data type reference and datasource ID.
+    
+    Args:
+        col_dtype_ref: Dictionary mapping column names to their data types.
+        datasource_id: The ID of the datasource to build filters for.
+        
+    Returns:
+        List of AvailableFilter objects representing available filters.
+    """
+    
     available_filters = []
-    for col in columns:
-        datatype = col_dtype_ref.get(col)
-         # some filter dtype is getting None  (eg. chart_id:121, Load Unit Queue Time Avg, col: latest_shift_for_cycle)
-        if datatype is None:
+    for col, dtype in col_dtype_ref.items():
+        if dtype is None:
             continue
-        filter_def = {"col": col, "dtype": datatype}
-        if datatype in ("STRING", "TEXT"):
+        
+        filter_def = {"col": col, "dtype": dtype}
+        
+        if dtype in ("STRING", "TEXT"):
+            
             filter_def["available_values"] = superset_client.get_filter_values(
                 datasource_id, col
             )
-       
-        
+            
         available_filters.append(superset_schemas.AvailableFilter(**filter_def))
+        
     return available_filters
