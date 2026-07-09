@@ -48,6 +48,7 @@ class ChartDetailService:
 
         form_data = result.get("form_data", {})
         groupby = form_data.get("groupby", [])
+        groupby_b = form_data.get("groupby_b", [])
         
         query_context = json.loads(result.get("slice", {}).get("query_context", "{}"))
         queries = query_context.get("queries", [])
@@ -71,6 +72,7 @@ class ChartDetailService:
             "adhoc_filters": form_data.get("adhoc_filters") or [],
             "adhoc_filters_b": form_data.get("adhoc_filters_b"),
             "groupby": groupby,
+            "groupby_b": groupby_b,
         }
 
     def get(self, chart_id, include_possible_analysis=True) -> superset_schemas.ChartDetail:
@@ -83,20 +85,27 @@ class ChartDetailService:
             )
             for g in chart["groupby"]
         ]
+        dimensions_b = [
+            superset_schemas.Dimension(
+                name=g if isinstance(g, str) else g.get("label"),
+                sql_expression=None if isinstance(g, str) else g.get("sqlExpression"),
+            )
+            for g in chart["groupby_b"]
+        ]
+        
+        if len(dimensions_b) > 0: 
+            dimensions = [dimensions, dimensions_b]
         
         time_grain_info = self._get_time_grain_info(chart["queries"], chart["time_grain_list"])
 
         metrics = parse_metrics(chart["metrics"], chart["metrics_b"])
-        locked_filters, adhoc_cols = parse_adhoc_filters(
+        locked_filters, _ = parse_adhoc_filters(
             chart["adhoc_filters"], chart["adhoc_filters_b"]
         )
         locked_filters = normalize_locked_filters(locked_filters)
         applied_filters = parse_applied_filters(chart["queries"])
 
-        columns = collect_filterable_columns(metrics, adhoc_cols, chart["queries"])
-        available_filters = build_available_filters(
-            columns, chart["col_dtype_ref"], chart["datasource_id"]
-        )
+        available_filters = build_available_filters(chart["col_dtype_ref"], chart["datasource_id"])
 
         table_data = superset_client.get_chart_data_table(chart["query_context"])
         samples = [

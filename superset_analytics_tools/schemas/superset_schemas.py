@@ -74,9 +74,29 @@ class SampleData(BaseModel):
     samples: List
 
 class AvailableFilter(BaseModel):
-    col: str 
-    dtype: str 
-    available_values: Optional[List[Optional[str]]] = None
+    col: str = Field(
+        description=(
+            "The dataset column that can be used as a filter when querying or "
+            "modifying the chart."
+        )
+    )
+
+    dtype: str = Field(
+        description=(
+            "The data type of the filter column (for example STRING, TEXT, "
+            "INTEGER, FLOAT, BOOLEAN, DATE, or TIMESTAMP). Use this to determine "
+            "the appropriate filter operator and value format."
+        )
+    )
+
+    available_values: Optional[List[Optional[str]]] = Field(
+        default=None,
+        description=(
+            "Known values for this filter column. This field is only populated for "
+            "STRING or TEXT columns and contains the distinct values available in "
+            "the dataset that can be used for filtering. Null for non-text columns."
+        )
+    )
 
 
 class AppliedFilter(BaseModel): 
