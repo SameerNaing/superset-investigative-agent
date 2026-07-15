@@ -1,10 +1,10 @@
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
-from ..services import AnomalyService, ChartDataService, AnalyticsSummaryService
+from ..services import AnomalyService, ChartDataService, AnalyticsSummaryService, QueryResultStoreService, query_memory_service
 from ..schemas.superset_schemas import AppliedFilter
 from ..constants.consts import QueryType
-from ..schemas.analytics_schemas import AnalyticsError
+from ..schemas.analytics_schemas import AnalyticsError, AnalyticsDataSource
 
 
 _anomaly_service = AnomalyService()
@@ -34,15 +34,38 @@ def _check_get_data(data: dict, query_type: QueryType | None) -> dict:
         return data.get("data_1")
 
 
+def _load_analytics_data(
+    source: AnalyticsDataSource,
+) -> list[dict]:
+    if source.source_type == "chart":
+        if source.chart_id is None:
+            raise ValueError(
+                "chart_id is required when source_type is 'chart'."
+            )
+
+        data = _chart_data_service.get(
+            source.chart_id,
+            source.filter,
+            source.time_grain,
+        )
+
+        return _check_get_data(data, source.query_type)
+
+    if source.source_type == "sql_execution":
+        stored_result = query_memory_service.get(source.execution_id)
+        return stored_result.data
+
+    raise ValueError(
+        f"Unsupported analytics source type: {source.source_type}"
+    )
+
+
 @tool
 def detect_timeseries_anomalies(
-    chart_id: int,
-    filter: list[AppliedFilter],
+    source: AnalyticsDataSource,
     time_col: str,
     summary_question: str,
     metric_col: str,
-    time_grain: str = None,
-    query_type: QueryType | None = None,
 ) -> str:
     """
     Analyze a time-series metric and explain its behaviour over time.
@@ -58,22 +81,19 @@ def detect_timeseries_anomalies(
       returns a concise natural-language interpretation of the findings.
 
     Args:
-        chart_id: Numeric ID of the Superset chart.
-        filter: Filters to apply before fetching chart data.
+        source: Reference describing where the analytics data should be
+            loaded from (a Superset chart or a stored SQL execution result).
         time_col: Name of the timestamp column.
         summary_question: The original user question used to focus the
             generated explanation.
         metric_col: Name of the numeric metric to analyze.
-        query_type: Required only for Mixed charts containing two queries.
-        time_grain: The time grain to use for the chart.
 
     Returns:
         A concise natural-language explanation that answers the user's
         question using either the raw data (small datasets) or statistical
         anomaly detection (larger datasets). 
     """
-    data = _chart_data_service.get(chart_id, filter, time_grain)
-    data = _check_get_data(data, query_type)
+    data = _load_analytics_data(source)
 
     try:
         result = _anomaly_service.detect_timeseries(
@@ -96,13 +116,10 @@ def detect_timeseries_anomalies(
 
 @tool
 def detect_cross_section_anomalies(
-    chart_id: int,
-    filter: list[AppliedFilter],
+    source: AnalyticsDataSource,
     category_col: str,
     summary_question: str,
     metric_col: str,
-    query_type: QueryType | None = None,
-    time_grain: str = None,
 ) -> str:
     """
     Analyze a metric across categories and explain unusual category-level values.
@@ -118,20 +135,17 @@ def detect_cross_section_anomalies(
       returns a concise natural-language interpretation of the findings.
 
     Args:
-        chart_id: Numeric ID of the Superset chart.
-        filter: Filters to apply before fetching chart data.
+        source: Reference describing where the analytics data should be
+            loaded from (a Superset chart or a stored SQL execution result).
         category_col: Name of the categorical column to compare.
         summary_question: The original user question used to focus the
             generated explanation.
         metric_col: Name of the numeric metric to compare across categories.
-        query_type: Required only for Mixed charts containing two queries.
-        time_grain: The time grain to use for the chart.
     Returns:
         A concise natural-language explanation that answers the user's
         question using either the raw data or cross-section anomaly detection.
     """
-    data = _chart_data_service.get(chart_id, filter, time_grain)
-    data = _check_get_data(data, query_type)
+    data = _load_analytics_data(source)
 
     try:
         result = _anomaly_service.detect_cross_section(
@@ -152,13 +166,10 @@ def detect_cross_section_anomalies(
 
 @tool
 def detect_relationship_anomalies(
-    chart_id: int,
-    filter: list[AppliedFilter],
+    source: AnalyticsDataSource,
     x_col: str,
     summary_question: str,
     y_col: str,
-    query_type: QueryType | None = None,
-    time_grain: str = None,
 ) -> str:
     """
     Analyze the relationship between two numeric columns and explain unusual
@@ -175,20 +186,17 @@ def detect_relationship_anomalies(
       returns a concise natural-language interpretation of the findings.
 
     Args:
-        chart_id: Numeric ID of the Superset chart.
-        filter: Filters to apply before fetching chart data.
+        source: Reference describing where the analytics data should be
+            loaded from (a Superset chart or a stored SQL execution result).
         x_col: Name of the independent/predictor numeric column.
         summary_question: The original user question used to focus the
             generated explanation.
         y_col: Name of the dependent/outcome numeric column.
-        query_type: Required only for Mixed charts containing two queries.
-        time_grain: The time grain to use for the chart.
     Returns:
         A concise natural-language explanation that answers the user's
         question using either the raw data or relationship anomaly detection.
     """
-    data = _chart_data_service.get(chart_id, filter, time_grain)
-    data = _check_get_data(data, query_type)
+    data = _load_analytics_data(source)
 
     try:
         result = _anomaly_service.detect_relationship(

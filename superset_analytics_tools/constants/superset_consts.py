@@ -1,6 +1,12 @@
 from enum import Enum
 
 
+class DTypeMapping(str, Enum):
+    NUMERIC = 0
+    STRING = 1
+    TEMPORAL = 2
+    BOOLEAN = 3
+
 class VizType(str, Enum):
     AREA = "echarts_area"
     BAR = "echarts_timeseries_bar"
@@ -50,3 +56,21 @@ class VizType(str, Enum):
     WATERFALL = "waterfall"
     WORD_CLOUD = "word_cloud"
     WORLD_MAP = "world_map"
+
+
+ignore_chart_ids = [
+    29, 
+    28, 
+    22, 
+    21, 
+    17,
+    27, 
+    26, 
+    25, 
+    24, 
+    23, 
+    20,
+    19, 
+    18
+]
+ignore_chart_viz_types = [VizType.HISTOGRAM, 'deck_scatter']

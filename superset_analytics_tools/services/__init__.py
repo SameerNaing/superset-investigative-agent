@@ -7,4 +7,8 @@ from .analytics_summary_service import AnalyticsSummaryService
 from .evidence_chart_service import EvidenceChartService
 from .dataset_detail_service import DatasetDetailService
 from .sql_execution_service import SQLExecutionService
+from .query_memory_service import QueryResultStoreService
     
+
+
+query_memory_service = QueryResultStoreService()
