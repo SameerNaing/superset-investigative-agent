@@ -101,7 +101,6 @@ def get_chart_data_table(payload, result_type="results"):
             "result_type": result_type
         })
     
-    
     res = requests.request("POST", url, headers=headers, data=payload)
     return res.json().get("result", []) 
 
@@ -154,7 +153,7 @@ def get_dataset_list(page=0, page_size=10):
         f"page:{page}",
         f"page_size:{page_size}",
         # TODO: just for superset only list the replica db datasets
-        "filters:!((col:database,opr:rel_o_m,value:3))"
+        "filters:!((col:database,opr:rel_o_m,value:1))"
     ]
     
     params = {"q": f"({','.join(q_parts)})"}

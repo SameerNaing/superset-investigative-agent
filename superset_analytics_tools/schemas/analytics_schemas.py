@@ -1,9 +1,10 @@
-from typing import Literal
+from typing import Literal, Annotated, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..schemas.superset_schemas import Analytics
 
+from ..schemas.superset_schemas import Analytics, AppliedFilter
+from ..constants.consts import QueryType
 
 class AnalyticsError(BaseModel):
     error: str
@@ -131,3 +132,79 @@ class SummaryResult(BaseModel):
     summary: str
     key_observations: list[str] = Field(default_factory=list)
     data_limitations: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Data Source
+# ---------------------------------------------------------------------------
+class ChartAnalyticsSource(BaseModel):
+    source_type: Literal["chart"] = Field(
+        description=(
+            "Load data from an existing Superset chart. "
+            "Use this source when analyzing chart data."
+        )
+    )
+
+    chart_id: int = Field(
+        description=(
+            "The unique Superset chart ID containing the data to analyze."
+        )
+    )
+
+    filter: list[AppliedFilter] = Field(
+        default_factory=list,
+        description=(
+            "Filters to apply before retrieving the chart data. "
+            "Use an empty list when no additional filters are required."
+        )
+    )
+
+    query_type: QueryType | None = Field(
+        default=None,
+        description=(
+            "Query selection for Mixed charts containing multiple queries. "
+            "Leave null for charts with a single query."
+        )
+    )
+
+    time_grain: str | None = Field(
+        default=None,
+        description=(
+            "Optional time aggregation to apply when retrieving chart data, "
+            "such as P1D, PTH, etc. the superset time grain codes. "
+            "Leave null to use the chart's existing time grain."
+        )
+    )
+
+
+class SQLExecutionAnalyticsSource(BaseModel):
+    source_type: Literal["sql_execution"] = Field(
+        description=(
+            "Load data from a previously executed SQL query stored for "
+            "analytics."
+        )
+    )
+
+    execution_id: str = Field(
+        description=(
+            "The execution ID returned by the analytics SQL execution tool. "
+            "The analytics tool will load the stored SQL result associated "
+            "with this ID."
+        )
+    )
+
+
+AnalyticsDataSource = Annotated[
+    Union[
+        ChartAnalyticsSource,
+        SQLExecutionAnalyticsSource,
+    ],
+    Field(
+        discriminator="source_type",
+        description=(
+            "Reference describing where the analytics data should be loaded "
+            "from. Select either a Superset chart or a previously stored SQL "
+            "execution result."
+        ),
+    ),
+]

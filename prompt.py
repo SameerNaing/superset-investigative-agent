@@ -96,6 +96,113 @@ If an existing metric satisfies the user's request, reuse it.
 Only generate a new SQL calculation when no existing business metric or
 calculated column satisfies the user's request.
 
+
+── Virtual Datasets ────────────────────────────
+
+A dataset may be either physical or virtual.
+
+A physical dataset references an existing database table or view, such as:
+
+schema.table_name
+
+A virtual dataset is defined by an approved SQL query stored in the dataset's
+`table` field. The virtual dataset name is not necessarily a real database
+table and must not be referenced directly in generated SQL.
+
+When a dataset is virtual:
+
+• Treat the complete SQL contained in the dataset's `table` field as the
+dataset's source relation and approved business logic.
+
+• Never use the Superset dataset name directly in the FROM clause unless the
+metadata explicitly identifies it as a physical database table or view.
+
+• Preserve the virtual dataset's underlying SQL logic.
+
+• Wrap the executable SQL body as a subquery or Common Table Expression (CTE),
+then query from that result.
+
+• Do not rewrite, simplify, replace, or bypass the database function calls,
+joins, transformations, defaults, or other business logic defined by the
+virtual dataset.
+
+• Superset Jinja template statements such as `{% set ... %}` are template
+instructions, not executable database SQL. Do not copy `{% set ... %}`
+statements into raw SQL sent directly to the database.
+
+• Resolve any Jinja-generated values required by the virtual dataset using the
+user's requested filters and the dataset's documented defaults.
+
+• Replace Jinja output expressions such as `{{ variable }}` with concrete,
+read-only SQL values or expressions before execution.
+
+• Apply the user's requested filters to the outer query whenever possible,
+while preserving the virtual dataset's internal business logic.
+
+Example virtual dataset:
+
+{% set time_filter = get_time_filter("timestamp_column", remove_filter=True) %}
+{% set id_param = url_param("id") %}
+{% set id_value = 2 if not id_param else id_param | int %}
+
+SELECT
+*,
+{{ id_value }} AS id_value
+FROM some_schema.some_function(
+jsonb_build_object(
+'id', {{ id_value }},
+'interval', 'hour',
+'start_time',
+COALESCE(
+{{ time_filter.from_expr or "NULL" }},
+now() - interval '1 day'
+),
+'end_time',
+COALESCE(
+{{ time_filter.to_expr or "NULL" }},
+now()
+)
+)
+)
+
+For a request covering the previous calendar month for id 2, convert the
+template into executable SQL and use it as the source relation:
+
+WITH dataset_source AS (
+SELECT
+*,
+2 AS id_value
+FROM some_schema.some_function(
+jsonb_build_object(
+'id', 2,
+'interval', 'hour',
+'start_time',
+DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month'),
+'end_time',
+DATE_TRUNC('month', CURRENT_DATE)
+)
+)
+)
+SELECT
+category,
+ROUND(SUM(metric_one), 0) AS total_metric_one,
+ROUND(SUM(metric_two), 0) AS total_metric_two
+FROM dataset_source
+GROUP BY category
+ORDER BY total_metric_one DESC;
+
+Incorrect:
+
+SELECT
+category,
+SUM(metric_one)
+FROM dataset_name
+GROUP BY category;
+
+The incorrect query assumes the Superset dataset name is a physical database
+table and bypasses the approved virtual dataset SQL.
+
+
 ── Existing Charts ────────────────────────────
 
 Datasets expose existing charts that reuse the dataset.
@@ -287,6 +394,43 @@ Generate the simplest SQL that correctly answers the question.
 Avoid introducing additional filters, joins, transformations, thresholds,
 validity checks, or assumptions unless they are required by the user's
 request or approved business logic.
+
+── Set operations: UNION, UNION ALL, INTERSECT, EXCEPT ──
+
+When combining multiple SELECT statements with a set operation:
+
+• ORDER BY, LIMIT, OFFSET, and FETCH placed after the final SELECT apply to the
+  complete combined result.
+
+• If only one SELECT branch must be ordered or limited, isolate that branch in
+  a CTE or subquery before applying the set operation.
+
+Correct:
+
+  WITH recent_records AS (
+      SELECT ...
+      FROM ...
+      ORDER BY event_ts DESC
+      LIMIT 10
+  )
+  SELECT ...
+  FROM recent_records
+
+  UNION ALL
+
+  SELECT ...
+  FROM another_source;
+
+Incorrect:
+
+  SELECT ...
+  FROM ...
+  LIMIT 10
+
+  UNION ALL
+
+  SELECT ...
+  FROM another_source;
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FILTER CONSTRUCTION FOR CHARTS

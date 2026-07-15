@@ -1,6 +1,18 @@
 from ..constants import superset_consts
 from ..schemas import superset_schemas
 
+def get_possible_analysis(time_cols:list[str], numerical_cols:list[str], categorical_cols:list[str]):
+    possible_analysis = []
+    
+    if time_cols and numerical_cols:
+        possible_analysis.append(superset_schemas.Analytics.TIME_SERIES)
+    if categorical_cols and numerical_cols:
+        possible_analysis.append(superset_schemas.Analytics.CROSS_SECTION)
+    if len(numerical_cols) > 1:
+        possible_analysis.append(superset_schemas.Analytics.RELATIONAL)
+        
+    return possible_analysis
+
 
 def build_sample_data(table_result, form_data, viz_type, include_possible_analysis=True):
     cols = table_result.get("colnames", [])
@@ -10,9 +22,9 @@ def build_sample_data(table_result, form_data, viz_type, include_possible_analys
     def cols_by_dtype(dtype):
         return [cols[i] for i, col_type in enumerate(cols_types) if col_type == dtype]
 
-    time_cols = cols_by_dtype(2)
-    categorical_cols = cols_by_dtype(1)
-    numerical_cols = [col for col in cols_by_dtype(0) if not col.endswith("_sort")]
+    time_cols = cols_by_dtype(superset_consts.DTypeMapping.TEMPORAL)
+    categorical_cols = cols_by_dtype(superset_consts.DTypeMapping.STRING)
+    numerical_cols = [col for col in cols_by_dtype(superset_consts.DTypeMapping.NUMERIC) if not col.endswith("_sort")]
 
     chart_time_column = None
     if viz_type == superset_consts.VizType.GANTT:
@@ -22,15 +34,7 @@ def build_sample_data(table_result, form_data, viz_type, include_possible_analys
         if x_axis in time_cols:
             chart_time_column = x_axis
 
-    possible_analysis = []
-    
-    if chart_time_column and numerical_cols:
-        possible_analysis.append(superset_schemas.Analytics.TIME_SERIES)
-    if categorical_cols and numerical_cols:
-        possible_analysis.append(superset_schemas.Analytics.CROSS_SECTION)
-    if len(numerical_cols) > 1:
-        possible_analysis.append(superset_schemas.Analytics.RELATIONAL)
-
+    possible_analysis = get_possible_analysis(chart_time_column, numerical_cols, categorical_cols)
 
     profile = superset_schemas.DataProfile(
         numeric_cols=numerical_cols,

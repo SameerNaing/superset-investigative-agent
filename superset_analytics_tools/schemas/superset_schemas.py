@@ -1,5 +1,6 @@
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Any
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -117,7 +118,7 @@ class TimeGrainInfo(BaseModel):
 
     available_vals: dict[str, str] = Field(
         default_factory=dict,
-        description="The time grains supported by this chart. Keys are user-friendly names (e.g. Hour, Day, Month) and values are the Superset time grain codes to use when updating the chart."
+        description="The time grains supported by this chart. Keys are user-friendly names (e.g. Hour, Day, Month) and values are the Superset time grain codes to use when updating the chart. So pass the value not key (P1D, PTH, etc) for other tool call if you want to change the time grain."
     )
 
 class Dimension(BaseModel):
@@ -311,3 +312,38 @@ class DatasetDetail(BaseModel):
         ...,
         description="The samples of the dataset."
     )
+class QueryColumnInfo(BaseModel):
+    name: str
+    dtype: str
+
+class SQLExecutionResponse(BaseModel):
+    execution_id: str = Field(
+        ...,
+        description="ID used by subsequent SQL analytics tools.",
+    )
+
+    row_count: int = Field(
+        ...,
+        description="Total number of rows returned by the SQL query.",
+    )
+
+    columns: list[QueryColumnInfo] = Field(
+        default_factory=list,
+        description="Columns and inferred data types in the SQL result.",
+    )
+
+    sample_rows: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="A small sample of the SQL result for selecting analytics and columns.",
+    )
+
+    possible_analysis: list[Analytics] = Field(
+        default_factory=list,
+        description="Analytics types supported by the result shape.",
+    )
+        
+class StoredQueryResult(BaseModel):
+    execution_id: str
+    data: list[dict[str, Any]]
+    created_at: datetime
+    expires_at: datetime

@@ -1,7 +1,11 @@
 from langchain_core.tools import tool
 
-from ..services import ChartDataService, ChartDetailService, ChartListService, EvidenceChartService, SQLExecutionService, DatasetListService, DatasetDetailService
+from superset_analytics_tools.schemas.superset_schemas import SQLExecutionResponse
+
+from ..services import ChartDataService, ChartDetailService, ChartListService, EvidenceChartService, SQLExecutionService, DatasetListService, DatasetDetailService, QueryResultStoreService, query_memory_service
 from ..schemas import AppliedFilter, DatasetDetail, DatasetListItem, DatasetDetail
+
+
 
 _chart_list_service = ChartListService()
 _chart_detail_service = ChartDetailService()
@@ -10,7 +14,6 @@ _evidence_chart_service = EvidenceChartService()
 _sql_execution_service = SQLExecutionService()
 _dataset_list_service = DatasetListService()
 _dataset_detail_service = DatasetDetailService()
-
 
 @tool
 def get_chart_list() -> list[dict]:
@@ -154,28 +157,106 @@ def get_dataset_detail(dataset_id: int) -> DatasetDetail:
 def execute_sql(
     db_connection_id: int,
     sql: str,
-    query_limit: int = 1000,
 ) -> dict:
     """
-    Execute a read-only SQL query against a Superset database.
+    Execute a read-only SQL query and return a small preview of the result.
 
-    Use this tool when answering a question requires querying data,
-    filtering, grouping, ranking, aggregation, or custom calculations.
+    Use this tool for simple data retrieval tasks where only a small amount of
+    data is needed to answer the user's question, such as:
+    - Looking up values
+    - Computing simple aggregates (SUM, COUNT, AVG, MIN, MAX)
+    - Retrieving top-N records
+    - Verifying query results
+    - Inspecting a small subset of data
+
+    This tool is intended for quick SQL exploration only. The result is limited
+    to a small number of rows (currently 10) to reduce LLM context usage and
+    improve response speed.
+
+    Use this tool when a small preview of the query result is sufficient to
+    answer the user's question directly.
+
+    Do not use this tool when the complete query result will be required for
+    subsequent analysis.
 
     Prefer reusing existing business metrics and calculated columns whenever
-    possible instead of generating equivalent SQL expressions.
-
-    SQL should be read-only and optimized to return only the data necessary
-    to answer the user's question.
+    possible instead of recreating equivalent SQL expressions.
 
     Args:
         db_connection_id: Superset database connection ID.
         sql: Read-only SQL statement to execute.
-        query_limit: Maximum number of rows to return.
+
+    Returns:
+        Up to 10 rows from the query result for quick inspection and answering
+        straightforward questions.
     """
+    
     results = _sql_execution_service.execute_sql(
         db_connection_id,
         sql,
-        query_limit,
+        query_limit=10
     )
     return results
+
+
+@tool 
+def execute_analytics_sql(
+    db_connection_id: int,
+    sql: str,
+    query_limit: int = 5000,
+    )->SQLExecutionResponse: 
+    """
+    Execute a read-only SQL query, store the complete result for subsequent
+    analytics, and return an execution ID.
+
+    Use this tool when the SQL result will be analyzed further rather than
+    answered directly. Typical use cases include:
+    - Time-series analysis
+    - Cross-section analysis
+    - Relationship analysis
+    - Anomaly detection
+    - Multi-step investigative workflows
+
+    This tool stores the complete query result internally instead of returning
+    all rows to the LLM. It returns:
+    - An execution ID that can be passed to analytics tools.
+    - A summary of the result schema.
+    - A small sample of rows for inspection.
+    - The analytics types supported by the result.
+
+    Use the returned execution_id when calling analytics tools. Reuse the
+    execution_id for subsequent analysis instead of executing the same SQL again,
+    unless the query itself needs to change.
+
+    Prefer reusing existing business metrics and calculated columns whenever
+    possible instead of recreating equivalent SQL expressions.
+    
+    
+    Args:
+        db_connection_id: Superset database connection ID.
+        sql: Read-only SQL statement to execute.
+        query_limit: Maximum number of rows to store for analytics.
+
+    Returns:
+        SQLExecutionResponse containing:
+        - execution_id
+        - row_count
+        - result columns
+        - sample_rows
+        - possible_analysis
+    
+    """
+    result, data = _sql_execution_service.execute_sql_and_build_sample_data(
+        database_id=db_connection_id,
+        sql=sql,
+        query_limit=query_limit
+    ) 
+    
+    query_memory_service.save(
+        execution_id=result.execution_id,
+        data=data
+    )
+    
+    return result.model_dump()
+    
+    
