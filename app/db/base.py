@@ -1,11 +1,12 @@
 import uuid
 
+from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
 
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(schema="bi")
 
 
 class UUIDPrimaryKeyMixin:
