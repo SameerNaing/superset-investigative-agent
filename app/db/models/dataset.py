@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
@@ -16,6 +16,13 @@ if TYPE_CHECKING:
 
 class Dataset(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "dataset"
+    __table_args__ = (
+        UniqueConstraint(
+            "data_source_id",
+            "source_id",
+            name="uq_dataset_data_source_source_id",
+        ),
+    )
 
     data_source_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -36,6 +43,22 @@ class Dataset(UUIDPrimaryKeyMixin, Base):
 
 class DatasetColumn(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "dataset_column"
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_id",
+            "source_id",
+            name="uq_dataset_column_dataset_source_id",
+        ),
+        # Name alone is not unique: chart adhoc columns may reuse a label with
+        # a different SQL expression than a dataset-registered column.
+        UniqueConstraint(
+            "dataset_id",
+            "name",
+            "expression",
+            name="uq_dataset_column_dataset_name_expression",
+            postgresql_nulls_not_distinct=True,
+        ),
+    )
 
     source_id: Mapped[str | None] = mapped_column(String)
     name: Mapped[str] = mapped_column(String, nullable=False)
@@ -64,6 +87,19 @@ class DatasetColumn(UUIDPrimaryKeyMixin, Base):
 
 class Metric(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "metric"
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_id",
+            "source_id",
+            name="uq_metric_dataset_source_id",
+        ),
+        UniqueConstraint(
+            "dataset_id",
+            "name",
+            "expression",
+            name="uq_metric_dataset_name_expression",
+        ),
+    )
 
     source_id: Mapped[str | None] = mapped_column(String)
     name: Mapped[str] = mapped_column(String, nullable=False)

@@ -1,9 +1,9 @@
 from app.db.base import Base
 from app.db.models import (
     Analytic,
-    DataSource,
     Dataset,
     DatasetColumn,
+    DataSource,
     FilterClause,
     FilterOperator,
     FilterType,

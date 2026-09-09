@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -15,6 +15,13 @@ if TYPE_CHECKING:
 
 class Analytic(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "analytic"
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_id",
+            "source_id",
+            name="uq_analytic_dataset_source_id",
+        ),
+    )
 
     dataset_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -27,7 +34,10 @@ class Analytic(UUIDPrimaryKeyMixin, Base):
     verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     dataset: Mapped["Dataset"] = relationship(back_populates="analytics")
-    queries: Mapped[list["Query"]] = relationship(back_populates="analytic")
+    queries: Mapped[list["Query"]] = relationship(
+        back_populates="analytic",
+        order_by="Query.position",
+    )
     visualizations: Mapped[list["Visualization"]] = relationship(
         back_populates="analytic",
     )

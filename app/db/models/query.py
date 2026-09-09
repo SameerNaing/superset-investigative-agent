@@ -52,19 +52,24 @@ class FilterType(str, enum.Enum):
 
 class Query(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "query"
+    __table_args__ = (UniqueConstraint("analytic_id", "position"),)
 
     analytic_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("analytic.id"),
         nullable=False,
     )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     row_limit: Mapped[int | None] = mapped_column(Integer)
 
     analytic: Mapped["Analytic"] = relationship(back_populates="queries")
     columns: Mapped[list["QueryColumn"]] = relationship(back_populates="query")
     metrics: Mapped[list["QueryMetric"]] = relationship(back_populates="query")
     filters: Mapped[list["QueryFilter"]] = relationship(back_populates="query")
-    orders: Mapped[list["QueryOrder"]] = relationship(back_populates="query")
+    orders: Mapped[list["QueryOrder"]] = relationship(
+        back_populates="query",
+        order_by="QueryOrder.position",
+    )
 
 
 class QueryColumn(Base):
